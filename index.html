@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Assessment — Viva</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;min-height:100vh;background:linear-gradient(135deg,#0a1a0f,#0f2a18,#1a3520);color:#fff;padding:24px 16px}
+  .container{max-width:600px;margin:0 auto}
+  .card{background:rgba(255,255,255,0.05);border-radius:14px;padding:20px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.08)}
+  input,select,textarea{width:100%;background:rgba(255,255,255,0.08);border:1px solid #374151;border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;margin-bottom:12px}
+  select{background:#1f2937}
+  textarea{min-height:80px;resize:vertical}
+  button{border:none;border-radius:10px;padding:12px 20px;cursor:pointer;font-size:14px;font-weight:700;transition:opacity 0.2s}
+  button:disabled{opacity:0.4;cursor:not-allowed}
+  .btn-row{display:flex;gap:10px}
+  .progress-bar{background:rgba(255,255,255,0.1);border-radius:99px;height:8px;margin-bottom:8px}
+  .progress-fill{height:100%;border-radius:99px;transition:width 0.4s}
+  .area-btn{width:100%;background:rgba(255,255,255,0.07);border-radius:14px;padding:18px 22px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:16px;border:2px solid transparent;transition:background 0.2s}
+  .area-btn:hover{background:rgba(255,255,255,0.13)}
+  .area-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .option-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;cursor:pointer}
+  .radio-circle{width:18px;height:18px;border-radius:50%;border:2px solid #4b5563;flex-shrink:0;margin-top:1px;transition:all 0.15s}
+  .check-box{width:18px;height:18px;border-radius:4px;border:2px solid #4b5563;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+  .scale-row{display:flex;gap:8px;margin-bottom:6px}
+  .scale-btn{flex:1;padding:10px 0;border-radius:8px;border:2px solid #374151;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;cursor:pointer;font-size:15px;transition:all 0.15s}
+  .section-header{border-radius:12px;padding:12px 16px;margin-bottom:20px}
+  .badge{border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700;color:#fff}
+  #admin-panel table{width:100%;border-collapse:collapse;font-size:13px}
+  #admin-panel th{background:rgba(255,255,255,0.1);padding:10px;text-align:left;color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+  #admin-panel td{padding:10px;border-bottom:1px solid rgba(255,255,255,0.06);color:#e5e7eb;vertical-align:top}
+  .filter-btn{padding:7px 14px;border-radius:8px;border:1px solid #374151;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;font-size:12px}
+  .filter-btn.active{border-color:#22c55e;background:#22c55e}
+  .report-bar-bg{background:rgba(255,255,255,0.1);border-radius:99px;height:10px;flex:1}
+  .report-bar-fill{height:100%;border-radius:99px;transition:width 0.6s}
+  .ai-block{background:rgba(255,255,255,0.05);border-radius:12px;padding:16px;margin-top:12px;border:1px solid rgba(255,255,255,0.1);white-space:pre-wrap;font-size:13px;line-height:1.7;color:#d1fae5}
+  .spinner{display:inline-block;width:18px;height:18px;border:3px solid rgba(255,255,255,0.2);border-top-color:#22c55e;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBBscNd2HmkoA_Zn5Z4JJu2oUjn3Huy64y-T8ql3ArwZyBZvqqf7zHYzQzcfkFC3Qq/exec";
+const ADMIN_PASSWORD = "admin2024";
+const STORAGE_KEY = "ai_assessment_results_v3";
+const CLAUDE_API = "https://api.anthropic.com/v1/messages";
+
+const postulacionQuestion = {
+  id:"postulacion",
+  text:"¿Te gustaría ser seleccionado(a) para compartir con el equipo una oportunidad, idea o mejora que podamos aplicar en el área usando IA?",
+  type:"single",
+  options:["Sí, me encantaría compartirlo","Tal vez, dependiendo del formato","No por ahora"],
+  scores:[0,0,0]
+};
+const postulacionOpen = {
+  id:"postulacion_open",
+  text:"Si respondiste que sí, describe brevemente la oportunidad, idea o mejora que tienes en mente.",
+  type:"open"
+};
+const vivaApoyoQuestion = {
+  id:"viva_apoyo",
+  text:"¿Cómo te gustaría que Viva te apoye a desarrollar más tus habilidades con la IA?",
+  type:"multi",
+  options:["Talleres o workshops prácticos de IA por área","Acceso a herramientas de IA pagadas (ej. ChatGPT Plus, Copilot)","Casos de uso reales aplicados a mi trabajo diario","Comunidad interna para compartir aprendizajes y prompts","Mentorías o sesiones con expertos en IA","Tiempo dedicado en mi jornada para explorar y experimentar con IA","Certificaciones o cursos online de IA"],
+  scores:[0,0,0,0,0,0,0]
+};
+
+const seccionesProductoDefault = [
+  { title:"Uso Actual de IA", questions:[
+    {id:"p1",text:"¿Con qué frecuencia utilizas herramientas de IA en tu trabajo diario?",type:"single",options:["Nunca","Ocasionalmente (1-2 veces por semana)","Frecuentemente (3-4 veces por semana)","Diariamente"],scores:[0,1,2,3]},
+    {id:"p2",text:"¿Qué herramientas de IA has utilizado en los últimos 3 meses?",type:"multi",options:["ChatGPT / GPT-4","Claude (Anthropic)","Gemini","Copilot (GitHub o Microsoft)","Notion AI","Herramientas nativas en Jira/Confluence","Ninguna"],scores:[1,1,1,1,1,2,0]},
+    {id:"p3",text:"¿En cuáles de estas tareas has usado IA?",type:"multi",options:["Redacción de PRDs o user stories","Priorización de backlog","Análisis de feedback de usuarios","Síntesis de investigación (UX research)","Creación de roadmaps","Preparación de presentaciones para stakeholders","No he usado IA en tareas de producto"],scores:[1,2,2,2,2,1,0]},
+    {id:"p4",text:"¿Qué tan efectivo ha sido el uso de IA en tu trabajo?",type:"scale",label:"1 = Nada efectivo, 5 = Muy efectivo",scores:[0,0,1,2,3]}
+  ]},
+  { title:"Jira & Confluence", questions:[
+    {id:"p5",text:"¿Qué tan avanzado es tu uso de Jira?",type:"single",options:["Básico: creo tickets y los muevo en el tablero","Intermedio: uso filtros, epics, sprints y reportes básicos","Avanzado: configuro workflows, automatizaciones y dashboards","Experto: administro proyectos, permisos y analizo métricas de equipo"],scores:[0,1,2,3]},
+    {id:"p6",text:"¿Cómo utilizas Confluence en tu día a día?",type:"multi",options:["Documentar PRDs y especificaciones","Crear y mantener wikis del equipo","Reuniones y notas (meeting notes)","OKRs y estrategia de producto","Integración con Jira para trazar requerimientos","No lo uso regularmente"],scores:[1,1,1,2,2,0]},
+    {id:"p7",text:"¿Has usado las funciones de IA integradas en Jira o Confluence (Atlassian Intelligence)?",type:"single",options:["No sabía que existían","Lo he escuchado pero no lo he usado","Lo he probado una o dos veces","Lo uso regularmente en mi flujo de trabajo"],scores:[0,0,1,3]},
+    {id:"p8",text:"¿Usas IA externa para complementar tu trabajo en Jira/Confluence?",type:"single",options:["No","Raramente","A veces","Siempre o casi siempre"],scores:[0,1,2,3]}
+  ]},
+  { title:"Visión Futura sobre IA", questions:[
+    {id:"p9",text:"¿En qué tareas de producto crees que la IA tendrá mayor impacto en los próximos 2 años?",type:"multi",options:["Automatización de discovery y síntesis de insights","Generación automática de user stories desde datos","Análisis predictivo de uso del producto","Priorización de features basada en datos en tiempo real","Asistentes de PM dentro de Jira/Confluence","No lo tengo claro aún"],scores:[2,2,2,2,1,0]},
+    {id:"p10",text:"¿Cuál afirmación describe mejor tu visión sobre el rol de la IA en producto?",type:"single",options:["La IA es una herramienta de productividad, útil para tareas operativas","La IA cambiará la forma de trabajar pero no reemplazará al equipo","La IA redefinirá los roles: quienes no la adopten quedarán atrás","La IA eventualmente automatizará gran parte del trabajo de producto"],scores:[1,2,3,3]},
+    {id:"p11",text:"¿Qué tan preparado(a) te sientes para liderar iniciativas de IA en tu equipo?",type:"scale",label:"1 = Nada preparado, 5 = Completamente preparado",scores:[0,0,1,2,3]},
+    {id:"p12",text:"Describe una tarea que hoy haces manualmente y que crees que podría mejorarse con IA.",type:"open"},
+    vivaApoyoQuestion, postulacionQuestion, postulacionOpen
+  ]}
+];
+
+const seccionesUXUI = [
+  { title:"Uso Actual de IA en Diseño", questions:[
+    {id:"u1",text:"¿Con qué frecuencia utilizas herramientas de IA en tu trabajo de diseño UX/UI?",type:"single",options:["Nunca","Ocasionalmente (1-2 veces por semana)","Frecuentemente (3-4 veces por semana)","Diariamente"],scores:[0,1,2,3]},
+    {id:"u2",text:"¿Qué herramientas de IA has utilizado en los últimos 3 meses?",type:"multi",options:["ChatGPT / GPT-4 (para textos o ideas)","Claude (Anthropic)","Figma AI o plugins de IA en Figma","Midjourney / DALL-E / Adobe Firefly","Galileo AI u otras herramientas de diseño con IA","Maze AI u otras para research","Ninguna"],scores:[1,1,2,2,2,2,0]},
+    {id:"u3",text:"¿En cuáles de estas tareas de diseño has usado IA?",type:"multi",options:["Generación de wireframes o layouts","Creación de assets visuales (íconos, imágenes, ilustraciones)","Síntesis de entrevistas o sesiones de usabilidad","Generación de copy para interfaces (UX writing)","Prototipado o generación de código desde diseño","Análisis de patrones de comportamiento de usuarios","No he usado IA en tareas de diseño"],scores:[2,1,2,2,2,2,0]},
+    {id:"u4",text:"¿Qué tan efectivo ha sido el uso de IA en tu proceso de diseño?",type:"scale",label:"1 = Nada efectivo, 5 = Muy efectivo",scores:[0,0,1,2,3]}
+  ]},
+  { title:"Herramientas de Diseño", questions:[
+    {id:"u5",text:"¿Qué tan avanzado es tu uso de Figma?",type:"single",options:["Básico: creo frames y componentes simples","Intermedio: uso auto layout, variantes y prototipado","Avanzado: creo design systems, uso plugins y handoff con devs","Experto: administro el design system y optimizo flujos del equipo"],scores:[0,1,2,3]},
+    {id:"u6",text:"¿Cuáles de estos plugins o herramientas de IA usas dentro de Figma?",type:"multi",options:["Figma AI (generación de layers o contenido)","Magician","Automator","Plugins de generación de imágenes","No uso plugins de IA en Figma","No sabía que existían"],scores:[2,2,2,2,0,0]},
+    {id:"u7",text:"¿Usas IA para sintetizar o analizar feedback de usuarios?",type:"single",options:["No, lo hago manualmente","Lo he intentado una o dos veces","Lo uso ocasionalmente","Es parte de mi flujo habitual de research"],scores:[0,1,2,3]},
+    {id:"u8",text:"¿Has explorado herramientas de IA que generan código o prototipos desde diseño (ej. Vercel v0, Anima)?",type:"single",options:["No sabía que existían","Lo conozco pero no lo he probado","Lo he explorado por curiosidad","Lo uso o lo he propuesto en proyectos"],scores:[0,0,1,3]}
+  ]},
+  { title:"Visión Futura sobre IA en Diseño", questions:[
+    {id:"u9",text:"¿En qué áreas del diseño UX/UI crees que la IA tendrá mayor impacto?",type:"multi",options:["Generación automática de wireframes desde un brief","Personalización visual de interfaces en tiempo real","Síntesis automática de research y hallazgos","Generación de assets y contenido visual","Pruebas de usabilidad automatizadas con IA","No tengo claridad sobre esto aún"],scores:[2,2,2,1,2,0]},
+    {id:"u10",text:"¿Cuál afirmación describe mejor tu visión sobre IA en diseño?",type:"single",options:["La IA es útil para tareas repetitivas como redimensionar o generar variantes","La IA acelerará el proceso creativo pero el criterio siempre será humano","La IA redefinirá el rol del diseñador hacia uno más estratégico y menos ejecutor","La IA eventualmente podrá diseñar interfaces completas sin intervención humana"],scores:[1,2,3,3]},
+    {id:"u11",text:"¿Qué tan preparado(a) te sientes para integrar IA en tu proceso de diseño?",type:"scale",label:"1 = Nada preparado, 5 = Completamente preparado",scores:[0,0,1,2,3]},
+    {id:"u12",text:"Describe una tarea de diseño que hoy haces manualmente y que crees que podría mejorarse con IA.",type:"open"},
+    vivaApoyoQuestion, postulacionQuestion, postulacionOpen
+  ]}
+];
+
+const seccionesContenidos = [
+  { title:"Uso Actual de IA en Contenidos", questions:[
+    {id:"co1",text:"¿Con qué frecuencia utilizas herramientas de IA en tu trabajo de contenidos?",type:"single",options:["Nunca","Ocasionalmente (1-2 veces por semana)","Frecuentemente (3-4 veces por semana)","Diariamente"],scores:[0,1,2,3]},
+    {id:"co2",text:"¿Qué herramientas de IA has utilizado en los últimos 3 meses?",type:"multi",options:["ChatGPT / GPT-4","Claude (Anthropic)","Gemini","Jasper","Copy.ai","Notion AI","Ninguna"],scores:[1,1,1,2,2,1,0]},
+    {id:"co3",text:"¿En cuáles de estas tareas de contenidos has usado IA?",type:"multi",options:["Redacción de artículos, blogs o descripciones","Generación de copies para campañas o redes sociales","Optimización SEO de contenidos","Creación de briefs o calendarios editoriales","Traducción o adaptación de contenidos","Revisión y corrección de estilo","No he usado IA en tareas de contenidos"],scores:[1,2,2,2,1,1,0]},
+    {id:"co4",text:"¿Qué tan efectivo ha sido el uso de IA en tu trabajo de contenidos?",type:"scale",label:"1 = Nada efectivo, 5 = Muy efectivo",scores:[0,0,1,2,3]}
+  ]},
+  { title:"Herramientas de Contenidos", questions:[
+    {id:"co5",text:"¿Qué tan avanzado es tu uso de herramientas de IA para redacción?",type:"single",options:["Básico: uso prompts simples para generar borradores","Intermedio: estructuro prompts con contexto y tono de marca","Avanzado: uso prompts encadenados y refino outputs iterativamente","Experto: diseño flujos de generación de contenido con IA para el equipo"],scores:[0,1,2,3]},
+    {id:"co6",text:"¿Usas IA para optimización SEO?",type:"single",options:["No, lo hago manualmente o no aplica en mi rol","Lo he intentado pero prefiero hacerlo manual","Lo uso ocasionalmente para apoyar mi proceso","Es parte habitual de mi flujo de trabajo"],scores:[0,1,2,3]},
+    {id:"co7",text:"¿Cómo utilizas IA en la planificación de contenidos?",type:"multi",options:["Generación de ideas para calendarios editoriales","Creación de briefs para el equipo","Análisis de tendencias de contenido","Adaptación de contenido para distintos canales","No la uso para planificación"],scores:[2,2,2,2,0]},
+    {id:"co8",text:"¿Has explorado herramientas de IA para generación de contenido visual o multimedia?",type:"single",options:["No sabía que existían para contenidos","Lo conozco pero no lo he probado","Lo he explorado por curiosidad","Lo uso regularmente en mi flujo de trabajo"],scores:[0,0,1,3]}
+  ]},
+  { title:"Visión Futura sobre IA en Contenidos", questions:[
+    {id:"co9",text:"¿En qué áreas de contenidos crees que la IA tendrá mayor impacto?",type:"multi",options:["Generación masiva de contenido personalizado por segmento","Optimización automática de SEO en tiempo real","Creación de contenido multimedia (video, audio, imágenes)","Análisis de performance y recomendaciones de mejora","Personalización del contenido según el perfil del usuario","No tengo claridad sobre esto aún"],scores:[2,2,2,2,2,0]},
+    {id:"co10",text:"¿Cuál afirmación describe mejor tu visión sobre IA en contenidos?",type:"single",options:["La IA es útil para superar el bloqueo creativo y generar primeros borradores","La IA acelerará la producción pero el criterio editorial siempre será humano","La IA redefinirá el rol: el creador de contenido será más estratega que redactor","La IA eventualmente podrá gestionar estrategias de contenido de forma autónoma"],scores:[1,2,3,3]},
+    {id:"co11",text:"¿Qué tan preparado(a) te sientes para integrar IA en tu proceso de creación de contenidos?",type:"scale",label:"1 = Nada preparado, 5 = Completamente preparado",scores:[0,0,1,2,3]},
+    {id:"co12",text:"Describe una tarea de contenidos que hoy haces manualmente y que crees que podría mejorarse con IA.",type:"open"},
+    vivaApoyoQuestion, postulacionQuestion, postulacionOpen
+  ]}
+];
+
+const areas = {
+  producto:{label:"Producto",color:"#22c55e",icon:"📋",stack:["Jira","Confluence"],roles:["Product Lead","Product Manager","Diseñador UX/UI","Contenidos"],
+    getSections:(role)=>{
+      if(role==="Diseñador UX/UI")return seccionesUXUI;
+      if(role==="Contenidos")return seccionesContenidos;
+      return seccionesProductoDefault;
+    }
+  },
+  crm:{label:"Email Marketing / CRM",color:"#f59e0b",icon:"📧",stack:["Braze"],roles:[],
+    getSections:()=>[
+      {title:"Uso Actual de IA",questions:[
+        {id:"c1",text:"¿Con qué frecuencia utilizas herramientas de IA en tu trabajo de Email Marketing o CRM?",type:"single",options:["Nunca","Ocasionalmente (1-2 veces por semana)","Frecuentemente (3-4 veces por semana)","Diariamente"],scores:[0,1,2,3]},
+        {id:"c2",text:"¿Qué herramientas de IA has utilizado en los últimos 3 meses?",type:"multi",options:["ChatGPT / GPT-4","Claude (Anthropic)","Gemini","Funciones de IA dentro de Braze","Jasper u otras herramientas de copywriting AI","Herramientas de segmentación predictiva","Ninguna"],scores:[1,1,1,2,1,2,0]},
+        {id:"c3",text:"¿En cuáles de estas tareas has usado IA?",type:"multi",options:["Redacción de copies para emails o push notifications","Generación y prueba de subject lines","Segmentación de audiencias","Optimización de horarios de envío","Análisis de resultados de campañas","Creación de journeys o flujos automatizados","No he usado IA en estas tareas"],scores:[1,2,2,2,2,2,0]},
+        {id:"c4",text:"¿Qué tan efectivo ha sido el uso de IA en tu trabajo?",type:"scale",label:"1 = Nada efectivo, 5 = Muy efectivo",scores:[0,0,1,2,3]}
+      ]},
+      {title:"Productividad & Automatización",questions:[
+        {id:"c5",text:"¿Usas IA para planificar o gestionar tu calendario de campañas?",type:"single",options:["No, lo hago manualmente","Lo he intentado una o dos veces","Lo uso ocasionalmente para proponer fechas o temas","Es parte de mi flujo habitual de planeación"],scores:[0,1,2,3]},
+        {id:"c6",text:"¿En cuáles de estas tareas de productividad has usado IA?",type:"multi",options:["Redacción de tickets o briefs de campaña","Resumen de resultados o reportes","Generación de ideas para campañas o promociones","Revisión y corrección de copies antes de enviar","Automatización de respuestas o seguimientos internos","Creación de plantillas reutilizables","No he usado IA para productividad"],scores:[2,2,2,1,2,2,0]},
+        {id:"c7",text:"¿Cuánto tiempo estimas que ahorras a la semana usando IA en tu trabajo?",type:"single",options:["No uso IA actualmente","Menos de 1 hora","Entre 1 y 3 horas","Más de 3 horas"],scores:[0,1,2,3]},
+        {id:"c8",text:"¿Has automatizado algún proceso repetitivo de tu área usando IA?",type:"single",options:["No, todo lo hago manualmente","Lo he pensado pero no lo he implementado","He automatizado algún proceso de forma parcial","Sí, tengo flujos automatizados funcionando con IA"],scores:[0,0,2,3]}
+      ]},
+      {title:"Braze",questions:[
+        {id:"c9",text:"¿Qué tan avanzado es tu uso de Braze?",type:"single",options:["Básico: envío campañas simples de email o push","Intermedio: uso Canvas, segmentación y A/B testing","Avanzado: configuro journeys complejos, Liquid templating y analizo cohorts","Experto: integro APIs, configuro eventos personalizados y analizo métricas de retención"],scores:[0,1,2,3]},
+        {id:"c10",text:"¿Cuáles de estas funcionalidades de Braze usas o has usado?",type:"multi",options:["Canvas (journeys multicanal)","Liquid templating para personalización","Connected Content (llamadas a APIs externas)","Predictive Churn o Predictive Events (IA nativa de Braze)","Currents (exportación de datos)","Feature Flags","Solo uso lo básico de campañas"],scores:[1,2,3,3,2,2,0]},
+        {id:"c11",text:"¿Has explorado el uso de IA dentro de Braze (Predictive Churn, Winning Path, Intelligent Timing)?",type:"single",options:["No sabía que Braze tenía funciones de IA","Lo conozco pero no lo he usado","Lo he probado en alguna campaña","Lo uso regularmente y analizo sus resultados"],scores:[0,0,1,3]},
+        {id:"c12",text:"¿Usas IA externa para complementar lo que configuras en Braze?",type:"single",options:["No","Raramente","A veces","Siempre o casi siempre"],scores:[0,1,2,3]}
+      ]},
+      {title:"Visión Futura sobre IA",questions:[
+        {id:"c13",text:"¿En qué áreas de CRM/Email Marketing crees que la IA tendrá mayor impacto?",type:"multi",options:["Hiperpersonalización de contenido en tiempo real","Predicción de churn y activación proactiva","Automatización completa de calendarios y campañas","Generación automática de copies y creatividades","Optimización autónoma de canales y frecuencia","No tengo claridad sobre esto aún"],scores:[2,2,2,2,2,0]},
+        {id:"c14",text:"¿Cuál afirmación describe mejor tu visión sobre IA en CRM?",type:"single",options:["La IA es útil para automatizar tareas repetitivas y ahorrar tiempo","La IA permitirá comunicaciones más relevantes y personalizadas","La IA redefinirá el rol: el equipo pasará de ejecutar a estrategizar","La IA transformará el CRM en una disciplina completamente predictiva y autónoma"],scores:[1,2,3,3]},
+        {id:"c15",text:"¿Qué tan preparado(a) te sientes para proponer e implementar casos de uso de IA en tu área?",type:"scale",label:"1 = Nada preparado, 5 = Completamente preparado",scores:[0,0,1,2,3]},
+        {id:"c16",text:"Describe un proceso de tu día a día que te gustaría automatizar o mejorar con IA.",type:"open"},
+        vivaApoyoQuestion, postulacionQuestion, postulacionOpen
+      ]}
+    ]
+  },
+  tech:{label:"Tech",color:"#f97316",icon:"💻",stack:["AWS","REST APIs"],roles:["Tech Lead","Software Engineering Manager"],
+    getSections:(role)=>{
+      const isSEM=role==="Software Engineering Manager";
+      return[
+        {title:"Uso Actual de IA",questions:[
+          {id:"t1",text:"¿Con qué frecuencia utilizas herramientas de IA en tu trabajo diario?",type:"single",options:["Nunca","Ocasionalmente (1-2 veces por semana)","Frecuentemente (3-4 veces por semana)","Diariamente"],scores:[0,1,2,3]},
+          {id:"t2",text:"¿Qué herramientas de IA has utilizado en los últimos 3 meses?",type:"multi",options:["GitHub Copilot","Cursor","Codeium / Tabnine","ChatGPT / GPT-4 para código o arquitectura","Claude (Anthropic)","Amazon CodeWhisperer","Ninguna"],scores:[2,2,2,1,1,2,0]},
+          {id:"t3",text:isSEM?"¿En cuáles de estas actividades has usado IA?":"¿En cuáles de estas tareas de desarrollo has usado IA?",type:"multi",
+           options:isSEM?["Diseño de arquitectura de sistemas","Evaluación de herramientas o librerías","Revisión de código del equipo (code review)","Documentación técnica","Planning y estimación de sprints","Onboarding de nuevos ingenieros","No he usado IA en estas tareas"]:["Escritura y autocompletado de código","Debugging y resolución de errores","Code review y sugerencias de mejora","Generación de tests unitarios o de integración","Documentación de código","Refactorización","No he usado IA en estas tareas"],
+           scores:[2,2,2,2,2,2,0]},
+          {id:"t4",text:"¿Qué tan efectivo ha sido el uso de IA en tu trabajo?",type:"scale",label:"1 = Nada efectivo, 5 = Muy efectivo",scores:[0,0,1,2,3]}
+        ]},
+        isSEM?{title:"Arquitectura & Decisiones Técnicas",questions:[
+          {id:"t5",text:"¿Has usado IA para apoyar decisiones de arquitectura de sistemas?",type:"single",options:["No, las decisiones las tomo sin apoyo de IA","Lo he explorado ocasionalmente","Lo uso para validar o contrastar decisiones","Es parte habitual de mi proceso de diseño técnico"],scores:[0,1,2,3]},
+          {id:"t6",text:"¿En cuáles de estos contextos de arquitectura has usado IA?",type:"multi",options:["Diseño de microservicios o APIs REST","Definición de estrategias de datos y almacenamiento","Evaluación de patrones de arquitectura (event-driven, serverless, etc.)","Análisis de trade-offs entre soluciones técnicas","Revisión de arquitecturas existentes para identificar deuda técnica","Diseño de infraestructura en AWS","No he usado IA en estos contextos"],scores:[2,2,2,2,2,2,0]},
+          {id:"t7",text:"¿Usas IA para evaluar o comparar herramientas, frameworks o librerías?",type:"single",options:["No, hago la evaluación manualmente","Ocasionalmente para obtener una perspectiva inicial","Frecuentemente como parte del proceso de evaluación","Siempre, es el primer paso de mi análisis técnico"],scores:[0,1,2,3]},
+          {id:"t8",text:"¿Has explorado servicios de IA nativos de AWS (ej. Bedrock, SageMaker, CodeWhisperer)?",type:"single",options:["No sabía que AWS tenía servicios de IA","Lo conozco pero no lo he usado","Lo he explorado o propuesto en algún proyecto","Lo usamos activamente en producción"],scores:[0,0,2,3]}
+        ]}:{title:"Productividad & Desarrollo",questions:[
+          {id:"t5",text:"¿Qué tan integrado está el uso de IA en tu flujo de desarrollo diario?",type:"single",options:["No lo uso en mi flujo de trabajo","Lo uso esporádicamente para tareas puntuales","Lo tengo integrado en algunas fases del desarrollo","Es parte central de cómo trabajo: código, tests, docs y review"],scores:[0,1,2,3]},
+          {id:"t6",text:"¿Usas IA para generación o revisión de tests?",type:"single",options:["No, los escribo manualmente","Lo he probado pero prefiero hacerlos manual","Lo uso ocasionalmente para generar casos de prueba","Lo uso regularmente para tests unitarios, de integración o e2e"],scores:[0,1,2,3]},
+          {id:"t7",text:"¿Cómo usas IA en el contexto de APIs REST o integraciones?",type:"multi",options:["Generación de endpoints o boilerplate","Documentación automática (ej. OpenAPI/Swagger)","Debugging de llamadas o respuestas de APIs","Generación de mocks o stubs para testing","Revisión de contratos de API","No la uso en este contexto"],scores:[2,2,2,2,2,0]},
+          {id:"t8",text:"¿Has explorado servicios de IA en AWS (ej. Bedrock, CodeWhisperer, SageMaker)?",type:"single",options:["No sabía que AWS tenía servicios de IA para desarrollo","Lo conozco pero no lo he usado","Lo he explorado o usado en algún proyecto","Lo uso regularmente en mi flujo de desarrollo"],scores:[0,0,2,3]}
+        ]},
+        {title:"Visión Futura sobre IA",questions:[
+          {id:"t9",text:isSEM?"¿En qué áreas de ingeniería crees que la IA tendrá mayor impacto estratégico?":"¿En qué áreas del desarrollo crees que la IA tendrá mayor impacto?",type:"multi",
+           options:isSEM?["Automatización del diseño de arquitecturas","Generación autónoma de infraestructura (IaC con IA)","Análisis predictivo de deuda técnica y riesgos","Aceleración del onboarding técnico","IA como co-revisor permanente de arquitectura y código","No tengo claridad sobre esto aún"]:["Generación autónoma de código desde requerimientos","Testing completamente automatizado","Refactorización y eliminación de deuda técnica con IA","CI/CD inteligente que detecta y corrige errores","Documentación técnica autogenerada y actualizada","No tengo claridad sobre esto aún"],
+           scores:[2,2,2,2,2,0]},
+          {id:"t10",text:"¿Cuál afirmación describe mejor tu visión sobre IA en ingeniería?",type:"single",
+           options:isSEM?["La IA es una herramienta más para el equipo de ingeniería","La IA acelerará la entrega pero las decisiones de arquitectura seguirán siendo humanas","La IA redefinirá cómo se diseñan y construyen sistemas a escala","La IA eventualmente tomará decisiones de arquitectura de forma autónoma"]:["La IA es útil para autocompletar código y ahorrar tiempo","La IA me permite enfocarme en problemas más complejos y creativos","La IA redefinirá el rol del developer: menos código manual, más criterio","La IA eventualmente escribirá la mayoría del código en producción"],
+           scores:[1,2,3,3]},
+          {id:"t11",text:isSEM?"¿Qué tan preparado(a) te sientes para liderar la adopción de IA en tu equipo de ingeniería?":"¿Qué tan preparado(a) te sientes para integrar IA como parte central de tu flujo de desarrollo?",type:"scale",label:"1 = Nada preparado, 5 = Completamente preparado",scores:[0,0,1,2,3]},
+          {id:"t12",text:isSEM?"Describe una decisión técnica o de arquitectura donde crees que la IA podría darte mayor valor hoy.":"Describe una tarea de desarrollo que hoy haces manualmente y que crees que podría mejorarse con IA.",type:"open"},
+          vivaApoyoQuestion, postulacionQuestion, postulacionOpen
+        ]}
+      ];
+    }
+  },
+  personalizacion:{label:"Personalización & Experimentación",color:"#16a34a",icon:"🎯",stack:["Dynamic Yield"],roles:[],
+    getSections:()=>[
+      {title:"Uso Actual de IA",questions:[
+        {id:"per1",text:"¿Con qué frecuencia utilizas herramientas de IA en tu trabajo de personalización o experimentación?",type:"single",options:["Nunca","Ocasionalmente (1-2 veces por semana)","Frecuentemente (3-4 veces por semana)","Diariamente"],scores:[0,1,2,3]},
+        {id:"per2",text:"¿Qué herramientas de IA has utilizado en los últimos 3 meses?",type:"multi",options:["ChatGPT / GPT-4","Claude (Anthropic)","Gemini","Funciones de IA dentro de Dynamic Yield","Herramientas de análisis estadístico con IA","Plataformas de recomendación con ML","Ninguna"],scores:[1,1,1,2,2,2,0]},
+        {id:"per3",text:"¿En cuáles de estas tareas has usado IA?",type:"multi",options:["Diseño de hipótesis para experimentos","Análisis de resultados de tests A/B","Segmentación de audiencias para personalización","Generación de variantes de contenido (copy, imágenes)","Recomendaciones de productos o contenido","Detección de anomalías en métricas","No he usado IA en estas tareas"],scores:[2,2,2,1,2,3,0]},
+        {id:"per4",text:"¿Qué tan efectivo ha sido el uso de IA en tus iniciativas?",type:"scale",label:"1 = Nada efectivo, 5 = Muy efectivo",scores:[0,0,1,2,3]}
+      ]},
+      {title:"Dynamic Yield",questions:[
+        {id:"per5",text:"¿Qué tan avanzado es tu uso de Dynamic Yield?",type:"single",options:["Básico: configuro variantes y lanzo tests A/B simples","Intermedio: uso segmentación, templates y analizo resultados de experimentos","Avanzado: configuro recomendaciones con ML, triggers y personalización en tiempo real","Experto: administro la plataforma, integro APIs y diseño estrategias de personalización a escala"],scores:[0,1,2,3]},
+        {id:"per6",text:"¿Cuáles de estas capacidades de Dynamic Yield usas o has usado?",type:"multi",options:["A/B y MVT testing","Personalización basada en afinidad o comportamiento","Motor de recomendaciones (Recommendations)","Audiences y segmentación avanzada","Triggers de comportamiento en tiempo real","Integración con CDP o fuentes de datos externas","Solo uso lo básico de A/B testing"],scores:[1,2,2,2,2,3,0]},
+        {id:"per7",text:"¿Con qué rigurosidad estadística diseñas tus experimentos?",type:"single",options:["Lanzo tests sin definir hipótesis formales ni tamaño de muestra","Defino hipótesis pero no siempre calculo el tamaño de muestra","Siempre defino hipótesis, muestra mínima, significancia y duración","Aplico frameworks avanzados (Bayesiano, CUPED, tests secuenciales)"],scores:[0,1,2,3]},
+        {id:"per8",text:"¿Has explorado las capacidades de IA/ML nativas de Dynamic Yield?",type:"single",options:["No sabía que Dynamic Yield tenía funciones de IA/ML","Lo conozco pero no lo he configurado","Lo he usado en alguna experiencia","Es parte central de mi estrategia de personalización"],scores:[0,0,1,3]}
+      ]},
+      {title:"Visión Futura sobre IA",questions:[
+        {id:"per9",text:"¿En qué áreas crees que la IA tendrá mayor impacto?",type:"multi",options:["Personalización 1:1 completamente automatizada","Generación automática de hipótesis y diseño de experimentos","Análisis continuo y optimización sin tests discretos (bandits)","Predicción de segmentos de alto valor antes de que actúen","Generación de contenido personalizado por IA en tiempo real","No tengo claridad sobre esto aún"],scores:[2,2,3,2,2,0]},
+        {id:"per10",text:"¿Cuál afirmación describe mejor tu visión sobre IA en personalización?",type:"single",options:["La IA ayuda a ejecutar más tests en menos tiempo","La IA permitirá pasar de segmentos a verdadera personalización individual","La IA hará obsoleto el A/B testing tradicional en 3-5 años","La IA y el ML ya deberían ser el núcleo de cualquier estrategia de personalización hoy"],scores:[1,2,2,3]},
+        {id:"per11",text:"¿Qué tan preparado(a) te sientes para diseñar una estrategia de personalización impulsada por IA?",type:"scale",label:"1 = Nada preparado, 5 = Completamente preparado",scores:[0,0,1,2,3]},
+        {id:"per12",text:"Describe un experimento o iniciativa que te gustaría potenciar con IA en Dynamic Yield.",type:"open"},
+        vivaApoyoQuestion, postulacionQuestion, postulacionOpen
+      ]}
+    ]
+  }
+};
+
+let state={
+  screen:"home",area:null,
+  user:{name:"",email:"",role:""},
+  answers:{},section:0,
+  adminPw:"",adminUnlocked:false,adminFilter:"all",
+  results:JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"),
+  report:null
+};
+
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state.results));}
+function getSections(){return areas[state.area].getSections(state.user.role);}
+
+function classify(score,max){
+  const p=score/max;
+  if(p<0.4)return"Junior";
+  if(p<0.7)return"Mid";
+  return"Senior";
+}
+
+function maxScore(sections){
+  let m=0;
+  sections.forEach(s=>s.questions.forEach(q=>{
+    if(q.type==="open"||!q.scores)return;
+    if(q.type==="scale")m+=3;
+    else if(q.type==="multi")m+=Math.max(...q.scores)*2;
+    else m+=Math.max(...q.scores);
+  }));
+  return m||1;
+}
+
+function calcScore(sections,answers){
+  let s=0;
+  sections.forEach(sec=>sec.questions.forEach(q=>{
+    if(q.type==="open"||!q.scores)return;
+    const a=answers[q.id];
+    if(a===undefined||a===null)return;
+    if(q.type==="scale")s+=(a-1);
+    else if(q.type==="multi")a.forEach(i=>s+=(q.scores[i]||0));
+    else s+=(q.scores[a]||0);
+  }));
+  return s;
+}
+
+function calcSectionScores(sections,answers){
+  return sections.map(sec=>{
+    let s=0,m=0;
+    sec.questions.forEach(q=>{
+      if(q.type==="open"||!q.scores)return;
+      if(q.type==="scale"){
+        m+=3;
+        const a=answers[q.id];
+        if(a!==undefined)s+=(a-1);
+      } else if(q.type==="multi"){
+        const mx=Math.max(...q.scores);
+        m+=mx; // max posible = el score más alto de esa pregunta
+        const a=answers[q.id]||[];
+        const gained=a.reduce((acc,i)=>acc+(q.scores[i]||0),0);
+        s+=Math.min(gained,mx); // cap al máximo de esa pregunta
+      } else {
+        m+=Math.max(...q.scores);
+        const a=answers[q.id];
+        if(a!==undefined)s+=(q.scores[a]||0);
+      }
+    });
+    const pct=m>0?Math.min(Math.round(s/m*100),100):0;
+    return{title:sec.title,score:s,max:m||1,pct};
+  });
+}
+
+function isSectionComplete(){
+  const qs=getSections()[state.section].questions;
+  for(const q of qs){
+    if(q.type==="open")continue;
+    const a=state.answers[q.id];
+    if(a===undefined||a===null)return false;
+    if(q.type==="multi"&&a.length===0)return false;
+  }
+  return true;
+}
+
+function getTotalQuestions(){
+  return getSections().reduce((acc,s)=>acc+s.questions.length,0);
+}
+
+function getAnsweredUpToSection(){
+  let count=0;
+  getSections().forEach((s,si)=>{
+    if(si<state.section)count+=s.questions.length;
+  });
+  return count;
+}
+
+async function generateReport(result,sections,answers){
+  const sectionScores=calcSectionScores(sections,answers);
+  const sorted=[...sectionScores].sort((a,b)=>b.pct-a.pct);
+  const strong=sorted.slice(0,2).map(s=>s.title).join(", ");
+  const opportunity=sorted.slice(-2).map(s=>s.title).join(", ");
+  const openAnswer=Object.values(result.openAnswers).filter(Boolean).join(". ");
+  const vivaAns=(answers["viva_apoyo"]||[]).map(i=>vivaApoyoQuestion.options[i]).join(", ");
+
+  const prompt=`Eres un coach de IA interno de Viva Aerobus, una aerolínea digital mexicana con un equipo joven y dinámico. Tu tono es una mezcla de: mentor cercano, compañero de equipo y speaker inspiracional. Usas español neutro, eres directo, cálido y motivador. Nunca eres genérico.
+
+La persona que completó el assessment se llama ${result.name}, trabaja en el área de ${result.area}${result.role?" como "+result.role:""}.
+
+Sus áreas más fuertes son: ${strong}.
+Sus áreas de mayor oportunidad son: ${opportunity}.
+Lo que quiere automatizar o mejorar con IA: "${openAnswer}".
+Cómo le gustaría que Viva lo apoye: ${vivaAns}.
+
+Genera una respuesta en 3 bloques claramente separados con estos encabezados exactos:
+
+### 💪 Tus fortalezas en IA
+2-3 oraciones reconociendo genuinamente lo que ya hace bien, con ejemplos concretos de su área.
+
+### 🚀 Tu mayor oportunidad
+2-3 oraciones específicas sobre qué puede mejorar y por qué importa para su rol en Viva. Sé concreto, no genérico.
+
+### 🗺️ Tu plan de desarrollo personalizado
+Un plan con 4 pasos concretos y accionables, cada uno con:
+- Qué hacer
+- Una herramienta o recurso específico y gratuito (con nombre real)
+- Por qué le va a servir en su trabajo en Viva
+
+Termina con una frase corta de cierre motivacional dirigida a ${result.name} por su nombre.`;
+
+  const res=await fetch(CLAUDE_API,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-sonnet-4-6",
+      max_tokens:1000,
+      messages:[{role:"user",content:prompt}]
+    })
+  });
+  const data=await res.json();
+  return data.content?.[0]?.text||"No se pudo generar el reporte.";
+}
+
+function exportCSV(){
+  const rows=state.results;
+  const headers=["Fecha","Área","Rol","Nombre","Email","Score","Score Máximo","Porcentaje","Nivel","Se postula","Idea","Viva apoyo"];
+  const data=rows.map(r=>[r.date,r.area,r.role,r.name,r.email,r.score,r.max,r.porcentaje,r.level,r.sePostula||"",r.ideaPostulacion||"",r.vivaApoyo||""]
+    .map(v=>`"${String(v||"").replace(/"/g,'""')}"`));
+  const csv="\uFEFF"+[headers.join(","),...data.map(r=>r.join(","))].join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
+  a.download=`assessment_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function render(){
+  const app=document.getElementById("app");
+  if(state.screen==="home")app.innerHTML=renderHome();
+  else if(state.screen==="form")app.innerHTML=renderForm();
+  else if(state.screen==="section")app.innerHTML=renderSection();
+  else if(state.screen==="report")app.innerHTML=renderReport();
+  else if(state.screen==="admin")app.innerHTML=renderAdmin();
+  bindEvents();
+}
+
+function renderHome(){
+  return`<div style="text-align:center;margin-bottom:36px;padding-top:40px">
+    <div style="font-size:48px;margin-bottom:8px">🤖</div>
+    <h1 style="font-size:26px;font-weight:800;margin-bottom:8px">¿Qué tan AI son los equipos de Viva?</h1>
+    <p style="color:#bbf7d0;font-size:15px;line-height:1.6">Este assessment es para conocer cómo estás usando la IA hoy,<br>qué tanto le sacas provecho y hacia dónde quieres ir.<br><strong style="color:#fff">No hay respuestas correctas o incorrectas — solo sé honesto(a) 🙌</strong></p>
+  </div>
+  <p style="color:#86efac;font-size:13px;text-align:center;margin-bottom:20px">Selecciona el área a la que perteneces 👇</p>
+  ${Object.entries(areas).map(([k,a])=>`
+    <button class="area-btn" data-area="${k}" style="border-color:${a.color}">
+      <div class="area-icon" style="background:${a.color}">${a.icon}</div>
+      <div style="text-align:left"><div style="font-weight:700;font-size:16px">${a.label}</div></div>
+    </button>`).join("")}
+  <div style="text-align:center;margin-top:24px">
+    <button id="admin-btn" style="background:none;border:1px solid #4b5563;color:#9ca3af;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px">🔐 Admin</button>
+  </div>`;
+}
+
+function renderForm(){
+  const a=areas[state.area];
+  return`<div style="max-width:480px;margin:40px auto">
+    <div class="card" style="border-color:${a.color}40">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
+        <div class="area-icon" style="background:${a.color};width:36px;height:36px;font-size:18px">${a.icon}</div>
+        <div><div style="font-weight:700">${a.label}</div><div style="color:#9ca3af;font-size:12px">Cuéntanos un poco de ti antes de empezar 👋</div></div>
+      </div>
+      <input id="inp-name" placeholder="Nombre completo *" value="${state.user.name}"/>
+      <input id="inp-email" placeholder="Email corporativo *" value="${state.user.email}"/>
+      ${a.roles.length>0?`<select id="inp-role">
+        <option value="">Selecciona tu rol *</option>
+        ${a.roles.map(r=>`<option value="${r}" ${state.user.role===r?"selected":""}>${r}</option>`).join("")}
+      </select>`:`<input type="hidden" id="inp-role" value="${a.label}"/>`}
+      <div class="btn-row">
+        <button style="flex:1;background:rgba(255,255,255,0.07);border:1px solid #374151;color:#9ca3af;border-radius:10px;padding:12px;cursor:pointer" id="back-home">← Volver</button>
+        <button id="start-btn" style="flex:2;background:${state.user.name&&state.user.email&&(state.user.role||!a.roles.length)?a.color:"#374151"};color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer" ${state.user.name&&state.user.email&&(state.user.role||!a.roles.length)?"":"disabled"}>Comenzar →</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSection(){
+  const a=areas[state.area];
+  const sections=getSections();
+  const sec=sections[state.section];
+  const totalQ=getTotalQuestions();
+  const answeredQ=getAnsweredUpToSection();
+  const progPct=Math.round((answeredQ/totalQ)*100);
+  const complete=isSectionComplete();
+  return`<div style="max-width:600px;margin:0 auto;padding-top:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div class="area-icon" style="background:${a.color};width:32px;height:32px;font-size:16px">${a.icon}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${a.label}${state.user.role&&state.user.role!==a.label?" · "+state.user.role:""} · ${state.user.name}</div>
+        <div style="color:#9ca3af;font-size:12px">Sección ${state.section+1} de ${sections.length}: ${sec.title}</div>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${progPct}%;background:${a.color}"></div></div>
+    <div style="text-align:right;color:#9ca3af;font-size:11px;margin-bottom:16px">${progPct}% completado</div>
+    <div class="section-header" style="background:${a.color}22;border:1px solid ${a.color}44">
+      <span style="color:${a.color};font-weight:700;font-size:16px">${sec.title}</span>
+    </div>
+    ${sec.questions.map((q,qi)=>renderQuestion(q,qi,a.color)).join("")}
+    <div class="btn-row" style="margin-top:8px;padding-bottom:32px">
+      <button style="flex:1;background:rgba(255,255,255,0.07);border:1px solid #374151;color:#9ca3af;border-radius:10px;padding:14px;cursor:pointer" id="prev-btn">← Anterior</button>
+      <button id="next-btn" style="flex:2;background:${complete?a.color:"#374151"};color:#fff;border:none;border-radius:10px;padding:14px;cursor:${complete?"pointer":"not-allowed"};font-size:14px;font-weight:700" ${complete?"":"disabled"}>
+        ${state.section<sections.length-1?"Siguiente sección →":"Ver mis resultados ✨"}
+      </button>
+    </div>
+  </div>`;
+}
+
+function renderQuestion(q,qi,color){
+  let inner="";
+  if(q.type==="single"){
+    inner=q.options.map((opt,oi)=>{
+      const sel=state.answers[q.id]===oi;
+      return`<div class="option-row" data-qid="${q.id}" data-val="${oi}" data-type="single">
+        <div class="radio-circle" style="border-color:${sel?color:"#4b5563"};background:${sel?color:"transparent"}"></div>
+        <span style="color:${sel?"#fff":"#9ca3af"};font-size:13px;line-height:1.4">${opt}</span>
+      </div>`;
+    }).join("");
+  }else if(q.type==="multi"){
+    inner=q.options.map((opt,oi)=>{
+      const sel=(state.answers[q.id]||[]).includes(oi);
+      return`<div class="option-row" data-qid="${q.id}" data-val="${oi}" data-type="multi">
+        <div class="check-box" style="border-color:${sel?color:"#4b5563"};background:${sel?color:"transparent"}">${sel?'<span style="color:#fff;font-size:11px;font-weight:700">✓</span>':""}</div>
+        <span style="color:${sel?"#fff":"#9ca3af"};font-size:13px;line-height:1.4">${opt}</span>
+      </div>`;
+    }).join("");
+  }else if(q.type==="scale"){
+    const btns=[1,2,3,4,5].map(v=>{
+      const sel=state.answers[q.id]===v;
+      return`<button class="scale-btn" data-qid="${q.id}" data-val="${v}" data-type="scale" style="border-color:${sel?color:"#374151"};background:${sel?color:"rgba(255,255,255,0.05)"}">${v}</button>`;
+    }).join("");
+    inner=`<div class="scale-row">${btns}</div><div style="color:#6b7280;font-size:11px">${q.label}</div>`;
+  }else if(q.type==="open"){
+    inner=`<textarea data-qid="${q.id}" data-type="open" placeholder="Escribe tu respuesta aquí...">${state.answers[q.id]||""}</textarea>`;
+  }
+  return`<div class="card">
+    <div style="color:#e5e7eb;font-weight:600;margin-bottom:14px;font-size:14px;line-height:1.5">
+      <span style="color:${color};margin-right:8px">${qi+1}.</span>${q.text}
+    </div>${inner}</div>`;
+}
+
+function renderReport(){
+  const a=areas[state.area];
+  const r=state.report;
+  if(!r)return`<div style="text-align:center;padding-top:80px"><div class="spinner"></div><p style="color:#9ca3af;margin-top:16px">Generando tu reporte personalizado...</p></div>`;
+
+  const sections=getSections();
+  const sectionScores=calcSectionScores(sections,state.answers);
+  const sorted=[...sectionScores].sort((a,b)=>b.pct-a.pct);
+
+  const aiText=r.aiReport||"";
+  const blocks=aiText.split(/###/).filter(Boolean).map(b=>b.trim());
+
+  return`<div style="max-width:620px;margin:0 auto;padding:24px 0 40px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:48px;margin-bottom:8px">🙌</div>
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:6px">¡Listo, ${state.user.name}!</h2>
+      <p style="color:#bbf7d0;font-size:14px">Aquí está tu reporte personalizado de IA</p>
+    </div>
+
+    <!-- Barras por sección -->
+    <div class="card">
+      <div style="font-weight:700;font-size:15px;margin-bottom:16px;color:${a.color}">📊 Tu perfil por área</div>
+      ${sorted.map(s=>`
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+            <span style="color:#e5e7eb">${s.title}</span>
+            <span style="color:${s.pct>=70?"#22c55e":s.pct>=40?"#f59e0b":"#ef4444"};font-weight:700">${s.pct}%</span>
+          </div>
+          <div class="report-bar-bg"><div class="report-bar-fill" style="width:${s.pct}%;background:${s.pct>=70?"#22c55e":s.pct>=40?"#f59e0b":"#ef4444"}"></div></div>
+        </div>`).join("")}
+      <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:#6b7280">
+        <span>🟢 Fortaleza (≥70%)</span>
+        <span>🟡 En desarrollo (40-69%)</span>
+        <span>🔴 Oportunidad (&lt;40%)</span>
+      </div>
+    </div>
+
+    <!-- Reporte IA -->
+    ${blocks.map(block=>{
+      const lines=block.split("\n");
+      const title=lines[0];
+      const body=lines.slice(1).join("\n").trim();
+      return`<div class="card" style="border-color:${a.color}33">
+        <div style="font-weight:700;font-size:15px;margin-bottom:10px;color:${a.color}">### ${title}</div>
+        <div style="font-size:13px;line-height:1.8;color:#d1fae5;white-space:pre-wrap">${body}</div>
+      </div>`;
+    }).join("")}
+
+    <button id="back-home-done" style="width:100%;background:${a.color};color:#fff;border:none;border-radius:10px;padding:14px;cursor:pointer;font-size:15px;font-weight:700;margin-top:8px">Volver al inicio</button>
+  </div>`;
+}
+
+function renderAdmin(){
+  if(!state.adminUnlocked)return`<div style="max-width:360px;margin:80px auto">
+    <div class="card" style="text-align:center;border-color:#374151">
+      <div style="font-size:36px;margin-bottom:12px">🔐</div>
+      <h2 style="margin-bottom:20px;font-size:18px">Acceso Administrador</h2>
+      <input id="admin-pw" type="password" placeholder="Contraseña"/>
+      <div id="admin-err" style="color:#ef4444;font-size:13px;margin-bottom:10px;display:none">Contraseña incorrecta</div>
+      <div class="btn-row">
+        <button style="flex:1;background:rgba(255,255,255,0.07);border:1px solid #374151;color:#9ca3af;border-radius:10px;padding:12px;cursor:pointer" id="back-home-admin">Cancelar</button>
+        <button id="admin-login" style="flex:2;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:12px;cursor:pointer;font-weight:700">Ingresar</button>
+      </div>
+    </div>
+  </div>`;
+
+  const filtered=state.adminFilter==="all"?state.results:state.results.filter(r=>r.areaKey===state.adminFilter);
+  const lc={Junior:"#ef4444",Mid:"#f59e0b",Senior:"#10b981"};
+  return`<div id="admin-panel" style="max-width:960px;margin:0 auto;padding-top:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">📊 Panel de Resultados</h2>
+        <p style="color:#9ca3af;font-size:13px">${filtered.length} respuesta(s)</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${filtered.length>0?`<button id="export-btn" style="background:#10b981;border:none;color:#fff;border-radius:10px;padding:10px 16px;cursor:pointer;font-size:13px;font-weight:700">📥 Exportar CSV</button>`:""}
+        <button id="back-home-admin2" style="background:rgba(255,255,255,0.07);border:1px solid #374151;color:#9ca3af;border-radius:10px;padding:10px 16px;cursor:pointer;font-size:13px">← Salir</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+      ${[["all","Todas"],["producto","Producto"],["crm","Email/CRM"],["tech","Tech"],["personalizacion","Personalización"]].map(([k,l])=>`
+        <button class="filter-btn ${state.adminFilter===k?"active":""}" data-filter="${k}">${l}</button>`).join("")}
+    </div>
+    ${filtered.length===0?`<div style="text-align:center;padding:60px;color:#6b7280"><div style="font-size:48px;margin-bottom:12px">📭</div><p>No hay respuestas aún.</p></div>`:`
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Fecha</th><th>Área</th><th>Rol</th><th>Nombre</th><th>Email</th><th>Score</th><th>Nivel</th><th>¿Se postula?</th></tr></thead>
+      <tbody>
+        ${filtered.slice().reverse().map(r=>`<tr>
+          <td style="color:#9ca3af;font-size:12px;white-space:nowrap">${r.date}</td>
+          <td><span style="color:${areas[r.areaKey]?.color||"#fff"};font-size:12px;font-weight:600">${r.area}</span></td>
+          <td style="color:#9ca3af;font-size:12px">${r.role}</td>
+          <td style="font-weight:600">${r.name}</td>
+          <td style="color:#9ca3af;font-size:12px">${r.email}</td>
+          <td style="white-space:nowrap">${r.score}/${r.max}<br><span style="color:#6b7280;font-size:11px">${r.porcentaje}</span></td>
+          <td><span class="badge" style="background:${lc[r.level]}">${r.level}</span></td>
+          <td style="font-size:12px">${r.sePostula||""}<br><span style="color:#6b7280">${r.ideaPostulacion||""}</span></td>
+        </tr>`).join("")}
+      </tbody>
+    </table></div>`}
+  </div>`;
+}
+
+function bindEvents(){
+  document.querySelectorAll(".area-btn").forEach(btn=>{
+    btn.onclick=()=>{state.area=btn.dataset.area;state.answers={};state.section=0;state.user={name:"",email:"",role:""};state.screen="form";render();};
+  });
+  const adminBtn=document.getElementById("admin-btn");
+  if(adminBtn)adminBtn.onclick=()=>{state.screen="admin";render();};
+
+  const inpName=document.getElementById("inp-name");
+  const inpEmail=document.getElementById("inp-email");
+  const inpRole=document.getElementById("inp-role");
+  const startBtn=document.getElementById("start-btn");
+  if(inpName){
+    const chk=()=>{
+      state.user.name=inpName.value;state.user.email=inpEmail.value;state.user.role=inpRole.value;
+      const ok=state.user.name&&state.user.email&&(state.user.role||!areas[state.area].roles.length);
+      startBtn.disabled=!ok;startBtn.style.background=ok?areas[state.area].color:"#374151";
+    };
+    inpName.oninput=chk;inpEmail.oninput=chk;inpRole.onchange=chk;
+    startBtn.onclick=()=>{if(!startBtn.disabled){state.screen="section";render();}};
+  }
+  const backHome=document.getElementById("back-home");
+  if(backHome)backHome.onclick=()=>{state.screen="home";render();};
+
+  document.querySelectorAll(".option-row").forEach(row=>{
+    row.onclick=()=>{
+      const{qid,val,type}=row.dataset;const v=parseInt(val);
+      if(type==="multi"){const prev=state.answers[qid]||[];const idx=prev.indexOf(v);state.answers[qid]=idx>=0?prev.filter(x=>x!==v):[...prev,v];}
+      else state.answers[qid]=v;
+      render();
+    };
+  });
+  document.querySelectorAll(".scale-btn").forEach(btn=>{
+    btn.onclick=()=>{state.answers[btn.dataset.qid]=parseInt(btn.dataset.val);render();};
+  });
+  document.querySelectorAll("textarea[data-type='open']").forEach(ta=>{
+    ta.oninput=()=>{state.answers[ta.dataset.qid]=ta.value;};
+  });
+
+  const prevBtn=document.getElementById("prev-btn");
+  if(prevBtn)prevBtn.onclick=()=>{state.section>0?state.section--:state.screen="form";render();};
+
+  const nextBtn=document.getElementById("next-btn");
+  if(nextBtn)nextBtn.onclick=()=>{
+    if(nextBtn.disabled)return;
+    const a=areas[state.area];
+    const sections=getSections();
+    if(state.section<sections.length-1){state.section++;render();}
+    else{
+      const score=calcScore(sections,state.answers);
+      const max=maxScore(sections);
+      const level=classify(score,max);
+      const openAnswers={};
+      sections.forEach(s=>s.questions.forEach(q=>{if(q.type==="open")openAnswers[q.id]=state.answers[q.id]||"";}));
+      const postulacionIdx=state.answers["postulacion"];
+      const postulacionOpts=["Sí, me encantaría compartirlo","Tal vez, dependiendo del formato","No por ahora"];
+      const sePostula=postulacionIdx!==undefined?postulacionOpts[postulacionIdx]:"";
+      const ideaPostulacion=state.answers["postulacion_open"]||"";
+      const vivaAns=(state.answers["viva_apoyo"]||[]).map(i=>vivaApoyoQuestion.options[i]).join(" | ");
+
+      const result={
+        id:Date.now(),date:new Date().toLocaleString("es-MX"),
+        area:a.label,areaKey:state.area,
+        name:state.user.name,email:state.user.email,role:state.user.role,
+        score,max,porcentaje:`${Math.round(score/max*100)}%`,level,
+        sePostula,ideaPostulacion,vivaApoyo:vivaAns,openAnswers,answers:{...state.answers}
+      };
+      state.results.push(result);save();
+
+      // Send to Google Sheets
+      const payload={fecha:result.date,area:result.area,rol:result.role,nombre:result.name,email:result.email,score:result.score,scoreMax:result.max,porcentaje:result.porcentaje,nivel:result.level,sePostula,ideaPostulacion,vivaApoyo:vivaAns};
+      sections.forEach(sec=>sec.questions.forEach(q=>{
+        if(["postulacion","postulacion_open","viva_apoyo"].includes(q.id))return;
+        const ans=state.answers[q.id];let readable="";
+        if(q.type==="open")readable=ans||"";
+        else if(q.type==="single"&&ans!==undefined)readable=q.options[ans]||"";
+        else if(q.type==="scale"&&ans!==undefined)readable=String(ans);
+        else if(q.type==="multi"&&ans&&ans.length>0)readable=ans.map(i=>q.options[i]).join(" | ");
+        payload[q.text.slice(0,60).replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\s]/g,"").trim()]=readable;
+      }));
+      fetch(GOOGLE_SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(e=>console.error(e));
+
+      // Show report screen and generate AI report
+      state.report={sectionScores:calcSectionScores(sections,state.answers),aiReport:null};
+      state.screen="report";render();
+
+      generateReport(result,sections,state.answers).then(aiText=>{
+        state.report.aiReport=aiText;render();
+      }).catch(()=>{
+        // Fallback rico por área
+        const area=result.area;
+        const role=result.role||area;
+        state.report.aiReport=`### 💪 Tus fortalezas en IA
+
+Ya estás usando IA en tu trabajo — eso te pone por delante de la mayoría. Completar este assessment demuestra que tienes curiosidad activa, y eso es el primer ingrediente para convertirte en un referente de IA en Viva.
+
+Basado en tus respuestas, tienes claridad sobre qué herramientas existen y cómo podrían aplicarse a tu área de ${area}. Eso es más valioso de lo que parece: muchos equipos fallan en adopción de IA no por falta de herramientas, sino por falta de criterio para elegirlas.
+
+### 🚀 Tu mayor oportunidad
+
+Tu siguiente salto está en pasar de usar IA ocasionalmente a integrarla como un flujo habitual en tu día a día. La diferencia entre alguien que "usa IA" y alguien que "trabaja con IA" es la consistencia y la intención.
+
+En ${area}, hay tareas específicas que hoy toman horas y con los prompts correctos pueden hacerse en minutos: síntesis de información, generación de primeros borradores, análisis de datos, automatización de reportes. El reto no es la herramienta — es construir el hábito y el criterio para saber cuándo y cómo usarla bien.
+
+### 🗺️ Tu plan de desarrollo personalizado
+
+**Paso 1 — Domina el arte del prompting (Semana 1-2)**
+Aprende a escribir prompts estructurados con contexto, rol, tarea y formato. Recurso: "Prompt Engineering Guide" en promptingguide.ai (gratuito). Aplícalo esta semana en una tarea real de ${area} — redactar un brief, sintetizar un documento, preparar una presentación.
+
+**Paso 2 — Elige tu herramienta principal y úsala todos los días (Semana 2-4)**
+No intentes usar 10 herramientas. Elige una: ChatGPT Plus o Claude Pro. Úsala diario durante 30 días en al menos 3 tareas de tu trabajo real en Viva. El objetivo es que se vuelva tan natural como abrir tu email.
+
+**Paso 3 — Construye tu biblioteca de prompts de ${area} (Mes 2)**
+Crea un documento en Notion o Google Docs con tus mejores prompts para las tareas más repetitivas de tu área. Ejemplos: "prompt para redactar un brief de campaña", "prompt para sintetizar resultados", "prompt para proponer ideas de mejora". Esto te ahorrará horas cada semana.
+
+**Paso 4 — Comparte y multiplica (Mes 2-3)**
+Organiza una sesión de 30 minutos con tu equipo donde muestres 3 casos de uso reales que ya estés usando. No necesitas ser experto — solo compartir lo que funciona. Esto te posiciona como referente de IA en Viva y acelera la adopción del equipo.
+
+¡Tú puedes liderar este cambio, ${result.name}! La IA no es el futuro de Viva — es el presente, y tú ya estás en el camino. 🚀`;
+        render();
+      });
+    }
+  };
+
+  const donBtn=document.getElementById("back-home-done");
+  if(donBtn)donBtn.onclick=()=>{state.screen="home";state.area=null;state.answers={};state.report=null;render();};
+
+  const adminPwInput=document.getElementById("admin-pw");
+  const adminLogin=document.getElementById("admin-login");
+  const adminErr=document.getElementById("admin-err");
+  if(adminLogin){
+    adminLogin.onclick=()=>{if(adminPwInput.value===ADMIN_PASSWORD){state.adminUnlocked=true;render();}else adminErr.style.display="block";};
+    adminPwInput.onkeydown=e=>{if(e.key==="Enter")adminLogin.click();};
+  }
+  const backAdm=document.getElementById("back-home-admin");
+  if(backAdm)backAdm.onclick=()=>{state.screen="home";render();};
+  const backAdm2=document.getElementById("back-home-admin2");
+  if(backAdm2)backAdm2.onclick=()=>{state.adminUnlocked=false;state.screen="home";render();};
+  document.querySelectorAll(".filter-btn").forEach(btn=>{btn.onclick=()=>{state.adminFilter=btn.dataset.filter;render();};});
+  const expBtn=document.getElementById("export-btn");
+  if(expBtn)expBtn.onclick=exportCSV;
+}
+
+render();
+</script>
+</body>
+</html>
